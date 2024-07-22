@@ -1,0 +1,199 @@
+//TimerScript
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class TimerScript : MonoBehaviour
+{
+    public QuizManager quizManager;
+
+    //these are for the timer
+    Image timerBar;
+    public float maxTime = 5f;
+    float timeLeft;
+
+    public void StartTimer()
+    {
+        //timer countdown
+        timerBar = GetComponent<Image>();
+        timeLeft = maxTime;
+    }
+
+    // Update is called once per frame
+    public void UpdateTimer()
+    {
+        if (timeLeft > 0)
+        {
+            timeLeft -= Time.deltaTime;
+            timerBar.fillAmount = timeLeft / maxTime;
+        }
+        else
+        {
+            quizManager.gameOvrScene();
+            Time.timeScale = 0;
+        }
+    }
+}
+
+
+
+//QuizManager
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using System;
+
+public class QuizManager : MonoBehaviour
+{
+    public List<QuestionAndAnswers> QnA;
+    [SerializeField] private List<Image> lifeImageList;
+
+    [SerializeField] private float timeLimit = 30f;
+
+    int totalQuestions = 0;
+    public int currentQuestion, score;
+    private int lifeRemaining = 3;
+    private float currentTime;
+
+    [SerializeField] private GameObject gameOverPnl;
+    //this is for buttons of multiple choices
+    public GameObject[] options;
+    public GameObject quizPanel, FinishPanel;
+    public GameObject GameOverPanel { get { return gameOverPnl; } }
+
+    [SerializeField] private Text timerText;
+    public Text QuestionTxt, ScoreTxt;
+    public Text TimerText { get { return timerText; } }
+
+    private GameStatus gameStatus = GameStatus.Next;
+
+    private void Start ()
+    {
+        //life counter and timer
+        currentTime = timeLimit;
+        lifeRemaining = 3;
+
+        totalQuestions = QnA.Count;
+        quizPanel.SetActive(true);
+        GenerateQuestion();
+
+        gameStatus = GameStatus.Playing;
+    }
+
+    public void correct()
+    {
+        //when the answer is correct
+        score += 1;
+        QnA.RemoveAt(currentQuestion);
+        StartCoroutine(WaitForNext());
+    }
+
+    public void wrong()
+    {
+        //when the answer is wrong
+
+        lifeRemaining--;
+        ReduceLife(lifeRemaining);
+        QnA.RemoveAt(currentQuestion);
+        StartCoroutine(WaitForNext());
+
+        if (lifeRemaining <= 0)
+        {
+            gameStatus = GameStatus.Next;
+            GameOverPanel.SetActive(true);
+        }
+    }
+
+    private void setTimer(float value)
+    {
+        TimeSpan time = TimeSpan.FromSeconds(value);
+        TimerText.text = "Time: " + time.ToString("mm':'ss");
+
+        if(currentTime <= 0)
+        {
+            gameStatus = GameStatus.Next;
+            GameOverPanel.SetActive(true);
+        }
+    }
+    public void ReduceLife(int index)
+    {
+        lifeImageList[index].color = Color.red;
+    }
+
+    [System.Serializable]
+    public enum GameStatus
+    {
+        Next,
+        Playing
+    }
+
+    IEnumerator WaitForNext()
+    {
+        yield return new WaitForSeconds(1);
+        GenerateQuestion();
+    }
+
+    private void Update()
+    {
+        if(gameStatus == GameStatus.Playing)
+        {
+            currentTime = Time.deltaTime;
+            setTimer(currentTime);
+        }
+    }
+
+    //when all levels are completed
+    void finishScene()
+    {
+        quizPanel.SetActive(false);
+        FinishPanel.SetActive(true);
+        ScoreTxt.text = score + "/" + totalQuestions;
+    }
+    public void retry()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void quit()
+    {
+        Application.Quit();
+    }
+    void setAnswers()
+    {
+        for(int i = 0; i < options.Length; i++)
+        {
+            options[i].GetComponent<AnswerScript>().isCorrect = false;
+            options[i].transform.GetChild(0).GetComponent<Text>().text = QnA[currentQuestion].Answers[i];
+
+            //for changing button colors
+            options[i].GetComponent<Image>().color = options[i].GetComponent<AnswerScript>().colorChange;
+
+            if (QnA[currentQuestion].CorrectAnswer == i + 1)
+            {
+                options[i].GetComponent<AnswerScript>().isCorrect = true;
+            }
+        }
+    }
+
+    void GenerateQuestion()
+    {
+        if (gameStatus == GameStatus.Playing)
+        {
+            if (QnA.Count > 0)
+            {
+                currentQuestion = UnityEngine.Random.Range(0, QnA.Count);
+
+                QuestionTxt.text = QnA[currentQuestion].Question;
+                setAnswers();
+            }
+            else
+            {
+                Debug.Log("You just finished this level!");
+                finishScene();
+            }
+        }
+    }
+}
